@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { Server } from "socket.io";
 import { connectDB } from "./config/db.js";
 import { initChatSocket } from "./socket/chatSocket.js";
+import Category from "./models/Category.js";
 
 import authRoutes from "./routes/auth.js";
 import listingsRoutes from "./routes/listings.js";
@@ -43,8 +44,25 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
 initChatSocket(io);
 
+// Agar bazada kategoriyalar bo'lmasa, avtomatik qo'shib qo'yadi
+async function autoSeedCategories() {
+  const count = await Category.countDocuments();
+  if (count === 0) {
+    await Category.insertMany([
+      { slug: "phone-gadget", nameUz: "Telefon & Gadjet", nameRu: "Телефоны и гаджеты", icon: "📱", type: "mahsulot" },
+      { slug: "auto-transport", nameUz: "Avto & Transport", nameRu: "Авто и транспорт", icon: "🚗", type: "mahsulot" },
+      { slug: "real-estate", nameUz: "Ko'chmas mulk", nameRu: "Недвижимость", icon: "🏠", type: "mahsulot" },
+      { slug: "electronics", nameUz: "Elektronika", nameRu: "Электроника", icon: "💻", type: "mahsulot" },
+      { slug: "furniture", nameUz: "Mebel", nameRu: "Мебель", icon: "🛋️", type: "mahsulot" },
+      { slug: "clothing", nameUz: "Kiyim-kechak", nameRu: "Одежда", icon: "👕", type: "mahsulot" },
+    ]);
+    console.log("✅ Kategoriyalar avtomatik qo'shildi");
+  }
+}
+
 const PORT = process.env.PORT || 5000;
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  await autoSeedCategories();
   server.listen(PORT, () => console.log(`🚀 Server ${PORT}-portda ishlamoqda`));
 });
