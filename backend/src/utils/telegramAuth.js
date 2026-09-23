@@ -3,8 +3,12 @@ import crypto from "crypto";
 // Telegram WebApp initData ni tekshirish (rasmiy hujjat bo'yicha)
 // https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
 export function verifyTelegramInitData(initData, botToken) {
+  if (!initData || typeof initData !== "string" || !botToken) return null;
+
   const urlParams = new URLSearchParams(initData);
   const hash = urlParams.get("hash");
+  if (!hash) return null;
+
   urlParams.delete("hash");
 
   const dataCheckArr = [];
@@ -19,5 +23,11 @@ export function verifyTelegramInitData(initData, botToken) {
   if (computedHash !== hash) return null;
 
   const userStr = urlParams.get("user");
-  return userStr ? JSON.parse(userStr) : null;
+  if (!userStr) return null;
+
+  try {
+    return JSON.parse(userStr);
+  } catch {
+    return null;
+  }
 }
