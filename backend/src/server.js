@@ -22,13 +22,32 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: process.env.CLIENT_URL || "*" },
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+  },
 });
 
-app.use(cors({ origin: process.env.CLIENT_URL || "*" }));
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
@@ -44,7 +63,6 @@ app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
 initChatSocket(io);
 
-// Agar bazada kategoriyalar bo'lmasa, avtomatik qo'shib qo'yadi
 async function autoSeedCategories() {
   const count = await Category.countDocuments();
   if (count === 0) {
@@ -61,6 +79,10 @@ async function autoSeedCategories() {
 }
 
 const PORT = process.env.PORT || 5000;
+
+if (!process.env.JWT_SECRET) {
+  console.warn("⚠️ JWT_SECRET topilmadi. Iltimos .env faylida uni belgilang.");
+}
 
 connectDB().then(async () => {
   await autoSeedCategories();

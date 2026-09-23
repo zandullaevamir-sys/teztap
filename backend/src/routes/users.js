@@ -1,45 +1,33 @@
-import express from "express";
-import User from "../models/User.js";
-import Listing from "../models/Listing.js";
-import { requireAuth } from "../middleware/auth.js";
+import crypto from "crypto";
 
-const router = express.Router();
+// Telegram WebApp initData ni tekshirish (rasmiy hujjat bo'yicha)
+// https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+export function verifyTelegramInitData(initData, botToken) {
+  if (!initData || typeof initData !== "string" || !botToken) return null;
 
-// Joriy foydalanuvchi profili
-router.get("/me", requireAuth, async (req, res) => {
-  const user = await User.findById(req.userId);
-  if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
-  res.json({ user });
-});
+  const urlParams = new URLSearchParams(initData);
+  const hash = urlParams.get("hash");
+  if (!hash) return null;
 
-// Boshqa foydalanuvchi profili (ochiq)
-router.get("/:id", async (req, res) => {
-  const user = await User.findById(req.params.id).select("-phone");
-  if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
-  res.json({ user });
-});
+  urlParams.delete("hash");
 
-// Mening e'lonlarim
-router.get("/me/listings", requireAuth, async (req, res) => {
-  const listings = await Listing.find({ seller: req.userId })
-    .populate("category", "nameUz nameRu icon")
-    .sort({ createdAt: -1 });
-  res.json({ listings });
-});
+  const dataCheckArr = [];
+  for (const [key, value] of [...urlParams.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    dataCheckArr.push(`${key}=${value}`);
+  }
+  const dataCheckString = dataCheckArr.join("\n");
 
-// Sevimli e'lonlarim
-router.get("/me/favorites", requireAuth, async (req, res) => {
-  const user = await User.findById(req.userId).populate({
-    path: "favorites",
-    populate: { path: "category", select: "nameUz nameRu icon" },
-  });
-  res.json({ favorites: user.favorites });
-});
+  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
+  const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
 
-// Profilni yangilash (shahar, ism va h.k.)
-router.put("/me", requireAuth, async (req, res) => {
-  const user = await User.findByIdAndUpdate(req.userId, req.body, { new: true });
-  res.json({ user });
-});
+  if (computedHash !== hash) return null;
 
-export default router;
+  const userStr = urlParams.get("user");
+  if (!userStr) return null;
+
+  try {
+    return JSON.parse(userStr);
+  } catch {
+    return null;
+  }
+}
