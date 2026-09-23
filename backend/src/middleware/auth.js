@@ -1,6 +1,10 @@
 import jwt from "jsonwebtoken";
 
 export function requireAuth(req, res, next) {
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ error: "Server auth konfiguratsiyasi yetarli emas" });
+  }
+
   const header = req.headers.authorization || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : null;
 
