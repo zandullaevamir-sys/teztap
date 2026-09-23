@@ -1,33 +1,45 @@
-import crypto from "crypto";
+import express from "express";
+import User from "../models/User.js";
+import Listing from "../models/Listing.js";
+import { requireAuth } from "../middleware/auth.js";
 
-// Telegram WebApp initData ni tekshirish (rasmiy hujjat bo'yicha)
-// https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
-export function verifyTelegramInitData(initData, botToken) {
-  if (!initData || typeof initData !== "string" || !botToken) return null;
+const router = express.Router();
 
-  const urlParams = new URLSearchParams(initData);
-  const hash = urlParams.get("hash");
-  if (!hash) return null;
+// Joriy foydalanuvchi profili
+router.get("/me", requireAuth, async (req, res) => {
+  const user = await User.findById(req.userId);
+  if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+  res.json({ user });
+});
 
-  urlParams.delete("hash");
+// Boshqa foydalanuvchi profili (ochiq)
+router.get("/:id", async (req, res) => {
+  const user = await User.findById(req.params.id).select("-phone");
+  if (!user) return res.status(404).json({ error: "Foydalanuvchi topilmadi" });
+  res.json({ user });
+});
 
-  const dataCheckArr = [];
-  for (const [key, value] of [...urlParams.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    dataCheckArr.push(`${key}=${value}`);
-  }
-  const dataCheckString = dataCheckArr.join("\n");
+// Mening e'lonlarim
+router.get("/me/listings", requireAuth, async (req, res) => {
+  const listings = await Listing.find({ seller: req.userId })
+    .populate("category", "nameUz nameRu icon")
+    .sort({ createdAt: -1 });
+  res.json({ listings });
+});
 
-  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
-  const computedHash = crypto.createHmac("sha256", secretKey).update(dataCheckString).digest("hex");
+// Sevimli e'lonlarim
+router.get("/me/favorites", requireAuth, async (req, res) => {
+  const user = await User.findById(req.userId).populate({
+    path: "favorites",
+    populate: { path: "category", select: "nameUz nameRu icon" },
+  });
+  res.json({ favorites: user.favorites });
+});
 
-  if (computedHash !== hash) return null;
+// Profilni yangilash (shahar, ism va h.k.)
+router.put("/me", requireAuth, async (req, res) => {
+  const user = await User.findByIdAndUpdate(req.userId, req.body, { new: true });
+  res.json({ user });
+});
 
-  const userStr = urlParams.get("user");
-  if (!userStr) return null;
-
-  try {
-    return JSON.parse(userStr);
-  } catch {
-    return null;
-  }
-}
+export default router;
